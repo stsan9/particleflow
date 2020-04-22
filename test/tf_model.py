@@ -11,6 +11,7 @@ try:
 except ImportError:
     print("Coult not import setGPU, please make sure you configure CUDA_VISIBLE_DEVICES manually")
     pass
+
 import pickle
 import matplotlib.pyplot as plt
 import numpy as np
@@ -545,12 +546,12 @@ if __name__ == "__main__":
     if args.load:
         model = tf.keras.models.load_model(args.load, compile=False)
 
-    #datapath = "/storage/group/gpu/bigdata/particleflow/TTbar_14TeV_TuneCUETP8M1_cfi"
+    datapath0 = "/storage/group/gpu/bigdata/particleflow/TTbar_14TeV_TuneCUETP8M1_cfi"
     datapath = "data/TTbar_14TeV_TuneCUETP8M1_cfi"
 
     num_gpus = len(os.environ["CUDA_VISIBLE_DEVICES"].split(","))
 
-    filelist = sorted(glob.glob(datapath + "/raw/*.pkl"))[:args.ntrain+args.ntest]
+    filelist = sorted(glob.glob(datapath0 + "/raw/*.pkl"))[:args.ntrain+args.ntest]
     X, y, ycand = load_one_file(filelist[0])
 
     from tf_data import _parse_tfr_element, NUM_EVENTS_PER_TFR

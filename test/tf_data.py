@@ -7,7 +7,7 @@ import tensorflow as tf
 from tf_model import load_one_file
 
 #save this many events in one TFRecord file
-NUM_EVENTS_PER_TFR = 100
+NUM_EVENTS_PER_TFR = 500
 
 def parse_args():
     import argparse
@@ -44,9 +44,9 @@ def _parse_tfr_element(element):
     arr_w = tf.io.parse_tensor(w, out_type=tf.float32)
 
     #https://github.com/tensorflow/tensorflow/issues/24520#issuecomment-577325475
-    arr_X.set_shape(tf.TensorShape((None, None)))
-    arr_y.set_shape(tf.TensorShape((None, None)))
-    arr_w.set_shape(tf.TensorShape((None, )))
+    arr_X.set_shape(tf.TensorShape((10000, 13)))
+    arr_y.set_shape(tf.TensorShape((10000, 4)))
+    arr_w.set_shape(tf.TensorShape((10000, )))
 
     return arr_X, arr_y, arr_w
 
@@ -69,6 +69,21 @@ def serialize_chunk(args):
 
     for fi in files:
         X, y, ycand = load_one_file(fi)
+
+        inds_sort_energy = np.argsort(X[:, 4])[::-1]
+        X = X[inds_sort_energy, :]
+        y = y[inds_sort_energy, :]
+        ycand = ycand[inds_sort_energy, :]
+    
+        max_elem = 10000
+        X = X[:max_elem, :]
+        y = y[:max_elem, :]
+        ycand = ycand[:max_elem, :]
+
+        X = np.pad(X, ((0, max_elem - X.shape[0]), (0,0)))
+        y = np.pad(y, ((0, max_elem - y.shape[0]), (0,0)))
+        ycand = np.pad(ycand, ((0, max_elem - ycand.shape[0]), (0,0)))
+
         Xs += [X]
         if target == "cand":
             ys += [ycand]
@@ -98,7 +113,7 @@ if __name__ == "__main__":
     args = parse_args()
     tf.config.experimental_run_functions_eagerly(True)
 
-    filelist = sorted(glob.glob("data/TTbar_14TeV_TuneCUETP8M1_cfi/raw/*.pkl"))
+    filelist = sorted(glob.glob("/storage/user/jpata/particleflow/data/TTbar_14TeV_TuneCUETP8M1_cfi/raw/*.pkl"))[:5000]
     path = "data/TTbar_14TeV_TuneCUETP8M1_cfi/tfr/{}".format(args.target)
 
     if not os.path.isdir(path):

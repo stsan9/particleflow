@@ -453,12 +453,105 @@ class PFNet8(nn.Module):
 
         return torch.sigmoid(edge_weight), cand_ids, cand_p4
 
+#Simplified model with SGConv, no edge classification, fast to train
+class PFNet9(nn.Module):
+    def __init__(self, input_dim=3, hidden_dim=32, output_dim_id=len(class_to_id), output_dim_p4=4, convlayer="gravnet-knn", space_dim=2, nearest=3, dropout_rate=0.0):
+        super(PFNet9, self).__init__()
+
+        act = nn.LeakyReLU
+        self.convlayer = convlayer
+
+        self.nn1 = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            act(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Dropout(dropout_rate),
+            act(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Dropout(dropout_rate),
+            act(),
+            nn.Linear(hidden_dim, hidden_dim),
+            act(),
+        )
+        #self.conv0 = SGConv(hidden_dim, hidden_dim, K=2)
+
+        if convlayer == "gravnet-knn":
+            self.conv1 = GravNetConv(hidden_dim, hidden_dim, space_dim, hidden_dim, nearest, neighbor_algo="knn") 
+            self.conv2 = GravNetConv(hidden_dim, hidden_dim, space_dim, hidden_dim, nearest, neighbor_algo="knn") 
+        elif convlayer == "gravnet-radius":
+            self.conv1 = GravNetConv(hidden_dim, hidden_dim, space_dim, hidden_dim, nearest, neighbor_algo="radius") 
+        elif convlayer == "sgconv":
+            self.conv1 = SGConv(hidden_dim, hidden_dim, K=3)
+        elif convlayer == "gatconv":
+            self.conv1 = GATConv(hidden_dim, hidden_dim, heads=1, concat=False)
+
+        self.nn2 = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Dropout(dropout_rate),
+            act(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Dropout(dropout_rate),
+            act(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Dropout(dropout_rate),
+            act(),
+            nn.Linear(hidden_dim, output_dim_id),
+        )
+        self.nn3 = nn.Sequential(
+            nn.Linear(hidden_dim + output_dim_id, hidden_dim),
+            nn.Dropout(dropout_rate),
+            act(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Dropout(dropout_rate),
+            act(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Dropout(dropout_rate),
+            act(),
+            nn.Linear(hidden_dim, output_dim_p4),
+        )
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+
+    def forward(self, data):
+        #print("forward", data.batch.device, len(torch.unique(data.batch)))
+        edge_weight = data.edge_attr.squeeze(-1)
+        edge_index = data.edge_index
+        
+        x = self.nn1(data.x)
+        #x = torch.nn.functional.leaky_relu(self.conv0(x, edge_index))
+        #x = data.x
+        
+        #Run a convolution
+        if self.convlayer == "gravnet-knn" or self.convlayer == "gravnet-radius":
+            new_edge_index, x = self.conv1(x)
+            #print("edges", len(new_edge_index[0]))
+            x = torch.nn.functional.leaky_relu(x)
+        else:
+            x = torch.nn.functional.leaky_rely(self.conv1(x, edge_index=edge_index))
+            
+        #Compute new edge weights based on embedded node pairs
+        xpairs = torch.cat([x[edge_index[0, :], :self.num_node_features_edgecls], x[edge_index[1, :], :self.num_node_features_edgecls], edge_weight.unsqueeze(-1)], axis=-1)
+        edge_weight2 = self.edgenet(xpairs).squeeze(-1)
+        edge_mask = edge_weight2 > 0.5
+        row, col = data.edge_index
+        row2, col2 = row[edge_mask], col[edge_mask]
+
+        #Run a second convolution with the new edges
+        x = torch.nn.functional.selu(self.conv2(x, torch.stack([row2, col2])))
+        
+        #Decode convolved graph nodes to pdgid and p4
+        cand_ids = self.nn2(x)
+        cand_p4 = data.x[:, len(elem_to_id):len(elem_to_id)+4] + self.nn3(torch.cat([x, cand_ids], axis=-1))
+
+        #print("forward done", data.batch.device)
+        return torch.sigmoid(edge_weight), cand_ids, cand_p4
 
 model_classes = {
     "PFNet5": PFNet5,
     "PFNet6": PFNet6,
     "PFNet7": PFNet7,
     "PFNet8": PFNet8,
+    "PFNet9": PFNet9,
 }
 
 def parse_args():

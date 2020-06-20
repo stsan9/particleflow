@@ -480,10 +480,13 @@ class PFNet9(nn.Module):
             self.conv2 = GravNetConv(hidden_dim, hidden_dim, space_dim, hidden_dim, nearest, neighbor_algo="knn") 
         elif convlayer == "gravnet-radius":
             self.conv1 = GravNetConv(hidden_dim, hidden_dim, space_dim, hidden_dim, nearest, neighbor_algo="radius") 
+            self.conv2 = GravNetConv(hidden_dim, hidden_dim, space_dim, hidden_dim, nearest, neighbor_algo="radius") 
         elif convlayer == "sgconv":
             self.conv1 = SGConv(hidden_dim, hidden_dim, K=3)
+            self.conv2 = SGConv(hidden_dim, hidden_dim, K=3)
         elif convlayer == "gatconv":
             self.conv1 = GATConv(hidden_dim, hidden_dim, heads=1, concat=False)
+            self.conv2 = GATConv(hidden_dim, hidden_dim, heads=1, concat=False)
 
         self.nn2 = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
@@ -524,20 +527,12 @@ class PFNet9(nn.Module):
         #Run a convolution
         if self.convlayer == "gravnet-knn" or self.convlayer == "gravnet-radius":
             new_edge_index, x = self.conv1(x)
-            #print("edges", len(new_edge_index[0]))
+            x = torch.nn.functional.leaky_relu(x)
+            new_edge_index, x = self.conv2(x)
             x = torch.nn.functional.leaky_relu(x)
         else:
             x = torch.nn.functional.leaky_rely(self.conv1(x, edge_index=edge_index))
-            
-        #Compute new edge weights based on embedded node pairs
-        xpairs = torch.cat([x[edge_index[0, :], :self.num_node_features_edgecls], x[edge_index[1, :], :self.num_node_features_edgecls], edge_weight.unsqueeze(-1)], axis=-1)
-        edge_weight2 = self.edgenet(xpairs).squeeze(-1)
-        edge_mask = edge_weight2 > 0.5
-        row, col = data.edge_index
-        row2, col2 = row[edge_mask], col[edge_mask]
 
-        #Run a second convolution with the new edges
-        x = torch.nn.functional.selu(self.conv2(x, torch.stack([row2, col2])))
         
         #Decode convolved graph nodes to pdgid and p4
         cand_ids = self.nn2(x)

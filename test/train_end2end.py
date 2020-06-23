@@ -627,7 +627,6 @@ class PFNet10(nn.Module):
         else:
             x = torch.nn.functional.leaky_rely(self.conv1(x, edge_index=edge_index))
 
-        
         #Decode convolved graph nodes to pdgid and p4
         cand_ids = self.nn2(x)
         cand_p4 = data.x[:, len(elem_to_id):len(elem_to_id)+4] + self.nn3(torch.cat([x, cand_ids], axis=-1))

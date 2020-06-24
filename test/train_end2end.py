@@ -544,7 +544,7 @@ class PFNet9(nn.Module):
 #Simplified model with SGConv, no edge classification, fast to train
 class PFNet10(nn.Module):
     def __init__(self, input_dim=3, hidden_dim=32, output_dim_id=len(class_to_id), output_dim_p4=4, convlayer="gravnet-knn", space_dim=2, nearest=3, dropout_rate=0.0):
-        super(PFNet9, self).__init__()
+        super(PFNet10, self).__init__()
 
         act = nn.LeakyReLU
         self.convlayer = convlayer

@@ -546,8 +546,7 @@ model_classes = {
     "PFNet6": PFNet6,
     "PFNet7": PFNet7,
     "PFNet8": PFNet8,
-    "PFNet9": PFNet9,
-    "PFNet10": PFNet10
+    "PFNet9": PFNet9
 }
 
 def parse_args():
